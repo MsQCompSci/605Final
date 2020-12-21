@@ -1,0 +1,724 @@
+---
+title: "605 Final Exam"
+author: "Layla Quinones"
+date: "12/17/2020"
+output:
+  html_document:
+    css: bootstrapD.css
+    toc: yes
+    toc_collapsed: yes
+    toc_depth: 3
+    toc_float: yes
+---
+# Problem 1
+
+**TASK: Using R, generate a random variable X that has 10,000 random uniform numbers from 1 to N, where N can be any number of your choosing greater than or equal to 6.  Then generate a random variable Y that has 10,000 random normal numbers with a mean of** $\mu = \sigma = (N+1)/2$.  
+
+```{r}
+#Set the seed for reproducability
+set.seed(19)
+
+#define N
+N <- 25
+
+m <- (N+1)/2
+
+#Random variable X (N = 10)
+x <- runif(10000, 1, 25)
+
+#random variable Y using the normal dist with mu and sigma given (N = 10)
+y <- rnorm(10000, m, m)
+```
+
+## Probability 
+
+**TASK: Calculate as a minimum the below probabilities a through c.  Assume the small letter "x" is estimated as the median of the X variable, and the small letter "y" is estimated as the 1st quartile of the Y variable.  Interpret the meaning of all probabilities.**
+
+```{r}
+#Assumptions
+smallX <- median(x)
+smallY <- quantile(y,0.25)
+```
+
+The estimated value for "small x" is `r smallX` and the estimated value for "small y" is `r smallY`.
+
+### a.   P(X>x | X>y)		
+
+Since `smallX` is greater than `smallY` we can simulate this in R using a uniform distribution to calculate the probability that `smallX` is greater than x if the minimum begins a `smallY`. This is a right tail problem therefore we specify `lower.tail = FALSE`
+
+```{r}
+p <- punif(smallX, smallY, max = N, lower.tail = FALSE)
+p
+```
+
+**Answer:** P(X>x | X>y) = `r p` when N = 25. As N increases, P(X>x | X>y) approaches 0.58.
+
+### b.  P(X>x, Y>y)	
+
+Assuming x and y are independent of eachother, we can calculate the probability of `x > smallX` and `y > smallY` using the formula:
+
+$P(A,B) = P(A) \times P(B)$
+
+```{r}
+#calculate the probabilty of A and B by counting the number
+#of entries that satisfy the condition and
+#divide by the total number of entries
+pA <- length(x[x > smallX])/ 10000
+
+pB <- length(y[y > smallY])/10000
+
+#Apply the formula
+pA * pB
+
+```
+
+Additionally we can calculate probabilities using simulation is R:
+
+```{r}
+#x as a uniform distribution from 1 to N
+pAsim <- punif(smallX, min = 1, max = N) 
+#y as a normal distribution with mu = sigma as defined above
+pBsim<- pnorm(smallY, m, m, lower.tail = FALSE)
+
+#Apply formula
+pAsim * pBsim
+```
+
+**Answer:** P(X>x, Y>y)	= `r pAsim * pBsim` when N = 25
+
+### c.  P(X<x | X>y)
+
+Since `smallX` is greater than `smallY` we can simulate this in R using a uniform distribution to calculate the probability that `smallX` is less than x if the minimum begins a `smallY`. This is a left tail problem (since it is asking for the probabiliy that `smallX` is less than `x`) and we expect it to be 1 - P(X>x | X>y) as found in part A.
+
+```{r}
+p3 <- punif(smallX, smallY, max = N, lower.tail = TRUE)
+p3
+```
+
+**Answer:** P(X<x|X>y)	= `r p3` when N = 25
+
+## Investigate
+
+**TASK: Investigate whether P(X>x and Y>y) = P(X>x) P(Y>y) by building a table and evaluating the marginal and joint probabilities.**
+
+```{r, message = FALSE, warning = FALSE}
+#Import library for displaying tables
+library(kableExtra) 
+
+#Create a dataframe of probabilities that is 3x3
+probDF <- data.frame(matrix(c(length(which(x>smallX & y>smallY)), #P(X > x) & P(Y > y)
+  length(which(x<smallX & y>smallY)), #P(X < x) & P(Y > y)
+  length(which(x>smallX & y>smallY)) + length(which(x<smallX & y>smallY)), # Sum
+  length(which(x>smallX & y<smallY)), #P(X > x) & P(Y < y)
+  length(which(x<smallX & y<smallY)), #P(X < x) & P(Y > y)
+  length(which(x<smallX & y<smallY)) + length(which(x<smallX & y<smallY)), #Sums
+  length(which(x>smallX & y>smallY)) + length(which(x>smallX & y<smallY)),
+  length(which(x<smallX & y>smallY)) + length(which(x<smallX& y<smallY)),
+  length(which(x>smallX & y>smallY)) + length(which(x<smallX & y>smallY)) + length(which(x<smallX & y<smallY)) + length(which(x<smallX & y<smallY)))/10000, ncol = 3, byrow = TRUE))
+
+#Add the names for each row as Y
+rownames(probDF) <- c('P(Y > y)','P(Y < y)','Sum')
+
+#add names for each column as X
+kable(probDF, 
+      col.names = c('P(X > x)','P(X < x)','Sum'), 
+      row.names = 1, 
+      format = "html", 
+      caption = "Probabilities")
+
+#Probability calculation using product
+(length(which(x > smallX))/10000 ) * (length(which(y > smallY))/10000)
+```
+
+**Answer:** According to the table a  P(X>x and Y>y) = 0.3744 which is approximately the same as if we multiply $P(X > x) \times P(Y > y) = 0.375$ considering that our data has a small error associated with it.
+
+## Independence Check
+
+**TASK: Check to see if independence holds by using Fisher’s Exact Test and the Chi Square Test.  What is the difference between the two? Which is most appropriate?**
+
+First we create a contingency table that counts all variations of cases we are interested in. We can pass this into some built in R functions to run the various tests.
+
+```{r}
+#Create table
+contTable <- data.frame(matrix(c(length(which(x > smallX & y > smallY)), # X > x; Y > y
+                                 length(which(x < smallX & y > smallY)), # X < x; Y > y
+                                 length(which(x > smallX & y < smallY)), # X > x; Y < y
+                                 length(which(x < smallX & y < smallY)) # X < x; Y < y
+                                 ), nrow = 2, byrow = TRUE))
+
+# specify names for rows
+rownames(contTable) <- c("Y > y","Y < y")
+
+#Display table with column frames
+kable(contTable, 
+      col.names = c("X > x","X < x"), 
+      row.names = 1, 
+      format = "html",
+      caption ="Contingency Table")
+```
+
+## Fisher's Exact Test
+
+Fisher's Exact test is useful to test the independence of categorical variables that have two possible outcomes. It uses contingency table infomration to calculate an exact p-value which we can use to determine if there is enough events to prove independance. It is worth noting that in reality values are not exact because x and y are random variables.              
+
+```{r}
+fisher.test(contTable)
+```
+
+From the table above we see that we have a p-value of 0.7995 which is much higher than 0.05 which indicates that we can state that these events are independent with 95% confidence. 
+
+## Chi Square Test
+
+$\chi^2$ test is another useful test to help identify if categorical variables are independent of eachother. It is similar to the Fisher Exact Test in that it uses a contingency table infomation to calculate a p-value however, it does this by comparing the data in question with what the data is expected to look like if it were truly independent and random. 
+
+```{r}
+#run the test
+chiTest <- chisq.test(contTable)
+#disp;lay results
+chiTest
+#display expected values and residuals
+chiTest$expected
+```
+
+As we can see from the output above, the p-value associated with the $\chi^2$ test is the same as in the Fisher's Exact Test (p = 0.7995), therefore there is evidence of independence. In this specific example because our sample size is very large (10,000), the $\chi^2$ is the better choice. In addition, since the Fisher's Exact Test relies on computing the p-value according to the hypergeometric distribution using binomial coefficients, these coefficients can get real large as sample size increases.
+
+# Problem 2
+
+**TASK: You are to register for Kaggle.com (free) and compete in the House Prices: Advanced Regression Techniques competition. https://www.kaggle.com/c/house-prices-advanced-regression-techniques. Complete the tasks as stated below.**
+
+## Descriptive and Inferential Statistics
+
+### Initial Data Analysis
+
+**TASK: Provide univariate descriptive statistics and appropriate plots for the training data set.**
+
+Before we can choose variables to highlight, it is a good idea to get a general sense of the behavior of each variable in the dataset which can be done by running descriptive statistics and visualizing the shape of each predictor in the training data set.
+
+```{r, message = FALSE, warning = FALSE}
+#Import libraries
+library(tidyverse)
+library(RCurl)
+library(caret)
+library(ggplot2)
+library(GGally)
+library(ggpubr)
+library(visdat)
+library(psych)
+
+#Import data from github repository and place ion a dataframe
+urlTest <- "https://raw.githubusercontent.com/MsQCompSci/605Final/main/test.csv"
+urlTrain <- "https://raw.githubusercontent.com/MsQCompSci/605Final/main/train.csv"
+rawTrain <- getURL(urlTrain)
+rawTest <- getURL(urlTest)
+trainDf <- read.csv(text = rawTrain) %>% 
+  data.frame()
+testDf <- read.csv(text = rawTest) %>% 
+  data.frame()
+```
+
+```{r}
+#summary statistics of training data
+summary(trainDf)
+dim(trainDf)
+```
+
+Upon intial inspection of the data, we can see that there are 1460 cases and 81 variables which include both numerical and categorical data. Next we can visualize each variable so we can choose variables to highlight for this project.
+
+```{r}
+#Explore shape of predictors and response variable 
+# Plot each variable frequency for each class (not including class column)
+par(mfrow = c(3,3))
+for(i in 2:ncol(trainDf)) {
+  plot(trainDf[i], main = colnames(trainDf[i]), col = "pink")
+}
+
+#Identify near zero variance predictors
+#so we can throw them out or not choose them
+nearZero<- nearZeroVar(trainDf)
+names(trainDf)[nearZero]
+
+#identify predictors that have NA values 
+#so we can impute or throw them out
+#Look at each column with Missing Values
+missing <- colSums(is.na(trainDf))
+
+#Select only columns with NA values
+missingColumns <- names(missing)[missing>0]
+
+# Add column with variable names             
+missing <- as.data.frame(missing)%>%
+  filter(missing!=0)%>%
+  mutate(key = as.factor(missingColumns))
+
+#Visualize columns with missing data
+  ggplot(missing) +
+    geom_bar(aes(x = reorder(key, missing), y = missing), fill = "purple", stat = "identity") +
+    labs(x='variable', y="number of missing values", title='Missing values by Column') +
+    coord_flip() +
+    geom_text(aes(x = key, y = missing + 1, label = missing))+
+    theme( plot.title = element_text(hjust = 0.5))
+```
+
+Based on the initial anlysis above and assuming that the `Sale price` is the response variable, lets take a look at `GarageArea`, `GrLivArea`, `BsmtUnfSF`, `Exterior1st`, and `Neighborhood`. The variables were chosen because they do not have near zero variance, missing values and include a range of categorical and numerical data. First lets take a look at the response variable `SalePrice` by plotting it as a histogram. 
+
+```{r, message = FALSE}
+ggplot(trainDf, aes(x=SalePrice)) + 
+  geom_histogram(color="black", fill="pink") +
+  labs(x='Sale Price', y="Frequency", title='Shape of Response Variable') +
+   theme(plot.title = element_text(hjust = 0.5))
+```
+
+From the above histogram we can tell that `SalePrice` has a right skew with most prices landing around the median and very few houses landing on the higher end of the price spectrum. Lets take a deeper look at each of the response variables identified above.
+
+```{r, message = FALSE, warning = FALSE}
+#plot Garage Area
+ggplot(trainDf, aes(x=GarageArea)) + 
+  geom_histogram(color="black", fill="purple") +
+  labs(x='Garage Area (square feet)', y="Frequency", title='Shape of Predictor Variable') +
+   theme(plot.title = element_text(hjust = 0.5))
+
+summary(trainDf$GarageArea)
+
+#plot Above Ground Living Area
+ggplot(trainDf, aes(x=GrLivArea)) + 
+  geom_histogram(color="black", fill="purple") +
+  labs(x='Living Area (square feet)', y="Frequency", title='Shape of Predictor Variable') +
+   theme(plot.title = element_text(hjust = 0.5))
+
+summary(trainDf$GrLivArea)
+
+#plot Unfinished Basement Area
+ggplot(trainDf, aes(x=BsmtUnfSF)) + 
+  geom_histogram(color="black", fill="purple") +
+  labs(x='Unfinished Basement Area (square feet)', y="Frequency", title='Shape of Predictor Variable') +
+   theme(plot.title = element_text(hjust = 0.5))
+
+
+summary(trainDf$BsmtUnfSF)
+```
+
+The visualizations above shows that the `GarageArea`, `GrLivArea`, `BsmtUnfSF` predictors have a slight right skew (which is confirmed via descriptive statistics median > mean).
+
+```{r, message = FALSE, warning = FALSE}
+#plot Exterier Covering on House
+ggplot(trainDf, aes(x=Exterior1st)) + 
+  geom_histogram(color="black", fill="purple", stat = "count") +
+  labs(x='Covering Type', y="Frequency", title='Shape of Predictor Variable') +
+   theme(plot.title = element_text(hjust = 0.5))
+#plot Neighborhood of House
+ggplot(trainDf, aes(x=Neighborhood)) + 
+  geom_histogram(color="black", fill="purple", stat = "count") +
+  labs(x='Neighborhood', y="Frequency", title='Shape of Predictor Variable') +
+   theme(plot.title = element_text(hjust = 0.5))
+```
+
+Visualizing the above categorical variables we can see that there is an imbalance in the distribution of `Exterior1st` with most houses being covered with Vinyl as compared to other coverings. We can also see that there are also imbalances in `Neighborhood` with more houses being solde in some neighborhoods over others. 
+
+### Scatterplots and Correlation
+
+**TASK: Provide a scatterplot matrix for at least two of the independent variables and the dependent variable. Derive a correlation matrix for any three quantitative variables in the dataset.**  
+
+```{r, warning = FALSE, message = FALSE}
+#Lets also take a look at correlation between variales
+ggcorr(trainDf, method = c("pairwise", "pearson")) +
+  labs(title = "Matrix Plot of All Variables") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+From initial inspection of all predictors, we see that there are a few that are highly correlated. Lets isolate some so we can take a better look at their correlation.
+
+```{r}
+#select predictors we are interested in and response
+trainThreePred <- trainDf %>%
+  select(GarageArea, GrLivArea, BsmtUnfSF, SalePrice)
+
+#Derive Correation Matrix
+cor(trainThreePred)
+
+#Plot correlation matrix
+vis_cor(trainThreePred)
+```
+
+The above visualization shows that the three quantitative variables chosen are somewhat correlated with `GarageArea` and `GrLivArea` being the most correlated compared with other variables. Lets take a look at a scatterplot matrix of these variables.
+
+```{r}
+pairs.panels(trainThreePred, 
+             method = "pearson", # correlation method
+             hist.col = "#00AFBB",
+             density = TRUE,  # show density plots
+             ellipses = TRUE # show correlation ellipses
+             )
+```
+
+### Hypothesis Test
+
+**TASK: Test the hypotheses that the correlations between each pairwise set of variables is 0 and provide an 80% confidence interval.  Discuss the meaning of your analysis.  Would you be worried about familywise error? Why or why not?**
+
+```{r}
+#GarageArea vs. GrLivArea
+cor.test(trainThreePred$GarageArea, trainThreePred$GrLivArea, conf.level = 0.8)
+```
+
+The above test shows that the p-value is really small (approaching zero) which is much less than our significance level (0.05) therefore we see that there is evidence of correlation between `GarageArea` and `GrLivArea`. We can also be 80% confident that the true correlation between these two variables falls approximately between 0.4424 and 0.4948 with the test estimating the true correlation at approximately 0.469.
+
+```{r}
+#GarageArea vs. BsmtUnfSF
+cor.test(trainThreePred$GarageArea, trainThreePred$BsmtUnfSF , conf.level = 0.8)
+```
+
+We can see from the above test that the p-value is really small (approaching zero) which is much less than our significance level (0.05) therefore we see that there is evidence of correlation between `GarageArea` and `BsmtUnfSF`. We can also be 80% confident that the true correlation between these two variables falls approximately between 0.151 and 0.2155 with the test estimating the true correlation at approximately 0.1833.
+
+```{r}
+#GrLivArea vs. BsmtUnfSF
+cor.test(trainThreePred$GrLivArea, trainThreePred$BsmtUnfSF , conf.level = 0.8)
+```
+
+We can see from the above test that the p-value is really small (approaching zero) which is much less than our significance level (0.05) therefore we see that there is evidence of correlation between `GrLivArea` and `BsmtUnfSF`. We can also be 80% confident that the true correlation between these two variables falls approximately between 0.2084 and 0.2716 with the test estimating the true correlation at approximately 0.2403.
+
+For these specific variables that I have highlighted, familywise error is not a concern because there are only 3 tests being performed however, when conducting multiple hypothesis tests (for example, for all predictors in the data set), I would be concerned about familywise error. This is because family wise error is the probability of detecting a false (determining that two variables are correlated when in fact they are not), therefore as more tests are conducted between variables this probability increases. 
+
+## Linear Algebra and Correlation  
+
+**TASK: Invert your correlation matrix from above. (This is known as the precision matrix and contains variance inflation factors on the diagonal.) Multiply the correlation matrix by the precision matrix, and then multiply the precision matrix by the correlation matrix. Conduct LU decomposition on the matrix.**
+
+```{r, warning = FALSE, message = FALSE}
+#library for LU decomposition
+library(pracma)
+#Derive Correation Matrix
+cMatrix <- cor(trainThreePred)
+#display
+cMatrix
+#invert to precision matrix
+pMatrix <- solve(cMatrix)
+#display
+pMatrix
+#multiply correlation matrix with precision matrix (dot product)
+CdotP <- cMatrix %*% pMatrix
+#Display
+CdotP
+#multiply correlation matrix with precision matrix (dot product)
+PdotC<- pMatrix %*% cMatrix
+#display
+PdotC
+#LU decomposition of correlation matrix
+lu(cMatrix)
+```
+
+## Calculus-Based Probability & Statistics
+
+**TASK: Many times, it makes sense to fit a closed form distribution to data.  Select a variable in the Kaggle.com training dataset that is skewed to the right, shift it so that the minimum value is absolutely above zero if necessary.**
+
+After my initial inspection of all variables I chose `TotalBsmtSF` for this problem because it seemed to be really skewed right. Further inspection confirms this as seen in the histogram and summary statitstics below. No shifting was necessary because the minimum value is zero however code was written to ensure this was the case and to demonstrate understanding.
+
+```{r, warning = FALSE, message = FALSE}
+#Historgram of TotalBsmtSF
+ggplot(trainDf, aes(x=TotalBsmtSF)) + 
+  geom_histogram(color="black", fill="lightblue") +
+  labs(x='Total Basement Area (square feet)', y="Frequency", title='Shape of Variable') +
+   theme(plot.title = element_text(hjust = 0.5))
+
+#summary Statitsics
+summary(trainDf$TotalBsmtSF)
+
+#Code for shifting
+if(min(trainDf$TotalBsmtSF) < 0){ #check if the minimum value is less than zero
+  
+  offset <- min(trainDf$TotalBsmtSF) #save the number of the min value
+  
+  for(i in trainDf$TotalBsmtSF){
+    # add this value to each case (multiply by negative 1 because the min value should be negative)
+    i <- i + (offset*-1) 
+  }
+}
+```
+
+## Fit Exponential Density 
+
+**TASK: Then load the MASS package and run fitdistr to fit an exponential probability density function.  (See  https://stat.ethz.ch/R-manual/R-devel/library/MASS/html/fitdistr.html ).  Find the optimal value of lambda for this distribution, and then take 1000 samples from this exponential distribution using this value (e.g., rexp(1000, lambda)).  Plot a histogram and compare it with a histogram of your original variable.**
+
+```{r, message = FALSE, warning = FALSE}
+#load library
+library(MASS)
+#fit exponential probability density function
+expDist <- fitdistr(trainDf$TotalBsmtSF, "exponential")
+#Find Lambda
+lambdaEXP <- expDist$estimate
+#Display Lambda
+lambdaEXP
+```
+
+As we can see from the output above, the optimal value for lambda is `r lambdaEXP`.
+
+```{r, warning = FALSE, message = FALSE}
+library(Stack) #to stack DF
+set.seed(111)
+
+#Take 1000 samples from exponential distribution from above
+expSamples <- rexp(1000, lambdaEXP)
+
+#put in a dataframe
+expDF <- data.frame(sqFT = c(expSamples), type = c("Exponential"))
+bsmtDF <- data.frame(sqFT = c(trainDf$TotalBsmtSF), type = c("Original"))
+
+#stack them
+bsmtDF <- Stack(expDF, bsmtDF)
+
+#plot a histogram with  both distributions to compare
+ggplot(bsmtDF, aes(x=sqFT, fill = type)) + 
+  geom_histogram(color = "white", alpha=0.5, position="identity") +
+  labs(x='Total Basement Area (square feet)', y="Frequency", title='Comparing Exponential Fit with Orginial Data') +
+   theme(plot.title = element_text(hjust = 0.5))
+
+#summary stats of both
+summary(expSamples)
+summary(trainDf$TotalBsmtSF)
+```
+
+We can clearly see some differences here between the original data and the data fit the the exponential function. Looking at the overlapping histogram visualization above, we can easily see that the median for each are really different; the exponential function has most of the data located around the minimum value (seems more skewed and spread out). After running some summary statistics we can see that the median for the exponentially fit data is much less than the original data (730.57 versus 991.5) howver, we also see that although the mean did change slightly, they are very close to one another and the scale has not changed. We also see that the min and max has changed as well (the eponential function has a greater min and max than the original data) and the exponential has a greater spread than the original data.
+
+### Percentiles and Confidence Intervals
+**TASK: Using the exponential pdf, find the 5th and 95th percentiles using the cumulative distribution function (CDF). Also generate a 95% confidence interval from the empirical data, assuming normality.  Finally, provide the empirical 5th percentile and 95th percentile of the data.  Discuss.**
+
+We can find the 5th and 95th percentile by using the lambda calculated above.
+
+```{r}
+#5th percentile
+qexp(0.05, lambdaEXP)
+#95th percentile
+qexp(0.95, lambdaEXP)
+
+```
+
+We can use the normal distribution to construct a confidence interval for the emperical data.
+
+```{r}
+#calculate the mean
+meanExp <- mean(expSamples)
+#calculate the standard dev
+s <- sd(expSamples)
+#number of cases
+n <- 1000
+error <- qnorm(0.95)*s/sqrt(n)
+lower <- meanExp-error
+upper <- meanExp+error
+lower
+upper
+
+#load library with built in z.test function
+library(BSDA)
+#confirm restuls using z.test function
+z.test(expSamples,mu = meanExp, sigma.x = s, sigma.y = NULL, alternative = "two.sided", conf.level = 0.95)
+```
+
+Based on my calculations above we can say that we are 95% confident that the true mean for the emperical data falls between `r lower` and `r upper`. In addition the built in `z.test()` function also shows that the upper and lower limits to this confidence interval are very close and confirms my calculations are correct. We can calculate the 5th and 95th percentiles using emperical data and compare it to the 5th and 95th percentile that was found via the exponential distribution.
+
+```{r}
+quantile(expSamples, c(0.05, 0.95))
+```
+
+Comparing the 5th and 95th percentile calculated using emperical data with the ones calculated using the exponential distribution, we can see some differences as expected. This is because our emperical data is random and based on the exponential distribution. As the number of samples in our emperical data approaches infinity, the values calculated emeprically should approach those calculated using the exponential distribution. In addition, as seen by comparing the 5th and 95th percentile from the emperical data, the exponential density function and the normal distribution function, we can see that the best way to model the behaviorof this variable is via exponential function.
+
+## Modeling  
+
+**Build some type of multiple regression  model and submit your model to the competition board.  Provide your complete model summary and results with analysis.  Report your Kaggle.com user name and score.**
+
+As seen in the EDA above, there are 79 variables, some are highly correlated, some have near zero variances and some have `NA` values that need correction. Also, we saw that some of the variables in our data is skewed left or right. All these factors will help us determine which model will be best, and appropriate methods to correct for some of these flaws in the data. 
+
+```{r}
+#Plot before
+#Visualize columns with missing data
+  ggplot(missing) +
+    geom_bar(aes(x = reorder(key, missing), y = missing), fill = "purple", stat = "identity") +
+    labs(x='variable', y="number of missing values", title='Missing values by Column') +
+    coord_flip() +
+    geom_text(aes(x = key, y = missing + 1, label = missing))+
+    theme( plot.title = element_text(hjust = 0.5))
+```
+
+Things that stand out to me are that variables like `Pool QC`,`MiscFeature`, etc which have mostly `NA` values but these NA values mean something (is its own category). Some of these columns will be translated and others will be imputed after test and train sets are identified.
+
+```{r}
+#Add Level and replace NA with NONE
+trainDf$PoolQC <- factor(trainDf$PoolQC, levels = c(levels(trainDf$PoolQC), "None"))
+trainDf$PoolQC[is.na(trainDf$PoolQC)] <- "None"
+
+trainDf$Fence <- factor(trainDf$Fence, levels = c(levels(trainDf$Fence), "None"))
+trainDf$Fence[is.na(trainDf$Fence)] <- "None"
+
+trainDf$Alley <- factor(trainDf$Alley, levels = c(levels(trainDf$Alley), "None"))
+trainDf$Alley[is.na(trainDf$Alley)] <- "None"
+
+trainDf$FireplaceQu <- factor(trainDf$FireplaceQu, levels = c(levels(trainDf$FireplaceQu), "None"))
+trainDf$FireplaceQu[is.na(trainDf$FireplaceQu)] <- "None"
+
+trainDf$GarageType <- factor(trainDf$GarageType, levels = c(levels(trainDf$GarageType), "None"))
+trainDf$GarageType[is.na(trainDf$GarageType)] <- "None"
+
+trainDf$GarageYrBlt <- factor(trainDf$GarageYrBlt, levels = c(levels(trainDf$GarageYrBlt), "None"))
+trainDf$GarageYrBlt[is.na(trainDf$GarageYrBlt)] <- "None"
+
+trainDf$GarageFinish <- factor(trainDf$GarageFinish, levels = c(levels(trainDf$GarageFinish), "None"))
+trainDf$GarageFinish[is.na(trainDf$GarageFinish)] <- "None"
+
+trainDf$GarageQual <- factor(trainDf$GarageQual, levels = c(levels(trainDf$GarageQual), "None"))
+trainDf$GarageQual[is.na(trainDf$GarageQual)] <- "None"
+
+trainDf$GarageCond <- factor(trainDf$GarageCond, levels = c(levels(trainDf$GarageCond), "None"))
+trainDf$GarageCond[is.na(trainDf$GarageCond)] <- "None"
+
+trainDf$BsmtQual<- factor(trainDf$BsmtQual, levels = c(levels(trainDf$BsmtQual), "None"))
+trainDf$BsmtQual[is.na(trainDf$BsmtQual)] <- "None"
+
+trainDf$BsmtCond<- factor(trainDf$BsmtCond, levels = c(levels(trainDf$BsmtCond), "None"))
+trainDf$BsmtCond[is.na(trainDf$BsmtCond)] <- "None"
+
+trainDf$BsmtExposure<- factor(trainDf$BsmtExposure, levels = c(levels(trainDf$BsmtExposure), "None"))
+trainDf$BsmtExposure[is.na(trainDf$BsmtExposure)] <- "None"
+
+trainDf$BsmtFinType1<- factor(trainDf$BsmtFinType1, levels = c(levels(trainDf$BsmtFinType1), "None"))
+trainDf$BsmtFinType1[is.na(trainDf$BsmtFinType1)] <- "None"
+
+trainDf$BsmtFinType2<- factor(trainDf$BsmtFinType2, levels = c(levels(trainDf$BsmtFinType2), "None"))
+trainDf$BsmtFinType2[is.na(trainDf$BsmtFinType2)] <- "None"
+
+
+trainDf$MiscFeature<- factor(trainDf$MiscFeature, levels = c(levels(trainDf$MiscFeature), "None"))
+trainDf$MiscFeature[is.na(trainDf$MiscFeature)] <- "None"
+
+#Look at missing values now (Same method as above)
+missing <- colSums(is.na(trainDf))
+missingColumns <- names(missing)[missing>0]       
+missing <- as.data.frame(missing)%>%
+  filter(missing!=0)%>%
+  mutate(key = as.factor(missingColumns))
+
+#Visualize columns with missing data
+  ggplot(missing) +
+    geom_bar(aes(x = reorder(key, missing), y = missing), fill = "purple", stat = "identity") +
+    labs(x='variable', y="number of missing values", title='Missing values by Column') +
+    coord_flip() +
+    geom_text(aes(x = key, y = missing + 1, label = missing))+
+    theme( plot.title = element_text(hjust = 0.5))
+
+#Variables that should be imputed using PMM
+#LotFrontage
+#MasVnrType
+#MasVnrArea
+#Electrical
+```
+
+Next we split the data into train and test sets. The train set will be used to develop the model and the test data will be used to evaluate the model's efficiency or "correctness" for predictions  of our target variable `Sale Price`. 
+
+```{r, message = FALSE, warning = FALSE}
+set.seed(8)
+#create train and test sets (80/20 split)
+#select random 80% of numbers between 1 and the row length
+trainIndex <- sample(1:nrow(trainDf), size = round(0.8*nrow(trainDf)), replace = FALSE)
+
+#Use the index to split the data 80/20
+trainData <- trainDf[trainIndex,]
+testData <- trainDf[-trainIndex,]
+
+#seperate predictors(X) from response(Y)
+#and omit meaningless column (test/train)
+trainDataX <- trainData %>% dplyr::select(-Id,-SalePrice)
+trainDataY <- trainData %>% dplyr::select(SalePrice)
+testDataX <-  testData %>% dplyr::select(-Id,-SalePrice)
+testDataY <-  testData %>% dplyr::select(SalePrice)
+predictDfX <- testDf %>% dplyr::select(-Id) #data to use for predictions
+```
+
+After exploring the shape of variables in the training set the following preprocessing steps were applied: `center` to center skewed data, `scale` to scale predictors to the mean, `BoxCox` to account for skewness, `pca` (Principal Component Analysis) transformations to deal with correlated variables and near zero variances (dimentionality reduction to linearly indepent features), and `knnImpute` which imputes the remaining `NA` values with k-nearest neighbor means. This was done and test and train data sets seperatley. 
+
+```{r}
+#Center and Scale Preprocessing (not on Yeild)
+preProcessedValues <- preProcess(trainDataX, method = c("center", "scale", "pca", "BoxCox", "knnImpute")) 
+preProcessedValues2 <- preProcess(trainDataX, method = c("pca")) 
+#Take  a look at the transformations being done
+preProcessedValues
+
+#Apply transofrmations
+trainDataX <- predict(preProcessedValues, trainDataX)
+testDataX <- predict(preProcessedValues, testDataX)
+
+#Identify near zero predictors (There is none now)
+nearZeroVar(trainDataX)
+
+#Lets also take a look at correlation between variables
+p1 <- ggcorr(trainDf, method = c("pairwise", "pearson")) +
+  labs(title = "Matrix Plot of All Variables") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p2 <- ggcorr(trainDataX, method = c("pairwise", "pearson")) +
+  labs(title = "Matrix Plot After PCA") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#create 3x3 grid for display for correlation before and after
+ggarrange(p1, p2, ncol = 2, nrow = 1)
+```
+
+Now that we have cleaned our data we can begin to train models to try to reach the best one for this data set. Lets take a look at a multiple linear regression approach. Here I chose to use the various model making tools that the `caret` package provides. To begin we first merge dependent and independant variable data sets into one dataframe so we can input them into the `train()` function `caret` provides for training models. Next we specify a control for how many times the model will be fit and validated. Here I chose 10-fold cross validation in which typically a portion of the training set is used to validate the model and measure how effective the model is. `caret` allows us to specify our validation method using the `trainControl()` function where you can also specify the resampling method, number of folds, number of times to repeat and finally, search for optimal hypertunning parameters. 
+
+```{r, message = FALSE, warning = FALSE}
+#merges X and Y data
+df <- data.frame(trainDataX, SalePrice = c(trainDataY$SalePrice))
+
+## 10-fold CV
+fitControl <- trainControl(method = "repeatedcv",   
+                           number = 10,     # number of folds
+                           repeats = 10, # repeated ten times
+                           search = "random") #tunning hyperparameters   
+```
+
+```{r, message = FALSE, warning = FALSE}
+# Only chose the PCA variables because its linear regression
+regModelOneA <- train(SalePrice ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + PC8 + PC9 + PC10 + PC11 + PC12 + PC13 + PC14 + PC15 + PC16 + PC17 + PC18 + PC19 +PC20 + PC21 + PC22 +PC23 + PC24 +PC25,
+                  data = df,
+                  method = "lm", 
+                  trControl = fitControl,
+                  na.action = na.omit)
+```
+
+
+```{r}
+#display Model
+regModelOneA #SUPER LOW R^2
+```
+
+We can see that the $R^2$ value is about 0.81 which means that this model accounts for 81% of the variation in the response variable. I was interested to see if we can get a better $R^2$ values if we were able to incorperate the categorical variables as well and may want to look into using a gradient boosted tree model. For now we can check the accuracy of our model's predictions. ----
+
+We can start to get a sense of how much each predictor contributes to the model by graphing each variable by order of importance. We can see that although all PCA variables were used in our model, some are much more influencial to our response variable than others. 
+
+```{r}
+#display variable importance
+ggplot(varImp(regModelOneA)) +
+  scale_fill_manual(values = "pink") +
+  labs(title = "Most Important Variables in Model") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+We can evaluate the model on our test set to measure how accurate it is able to predict known values for the response variable in the test set. 
+
+```{r}
+#Make a prediction
+predictions <- predict(regModelOneA, testDataX)
+
+#R-squared on test data
+postResample(pred = predictions, obs = testDataY$SalePrice)
+```
+
+We can see from the $R^2$ above that the model accounts for about 68 percent of the variation in the response variable for the test data. In the future I would like to improve my approach and choose a model that is able to incorperate both categorical and numerical predictors in hopes that the $R^2$ is improved and the model is more accurate at making predictions. 
+
+Kaggle Username: laylaquinones 
+
+Score: 0.61
+
+References:
+
+- [https://towardsdatascience.com/create-predictive-models-in-r-with-caret-12baf9941236](https://towardsdatascience.com/create-predictive-models-in-r-with-caret-12baf9941236)
+- [https://machinelearningmastery.com/k-fold-cross-validation/](https://towardsdatascience.com/create-predictive-models-in-r-with-caret-12baf9941236)
+- [https://learnche.org/pid/latent-variable-modelling/principal-component-analysis/testing-the-pca-model](https://towardsdatascience.com/create-predictive-models-in-r-with-caret-12baf9941236)
+- [https://www.datascienceblog.net/post/statistical_test/contingency_table_tests/](https://towardsdatascience.com/create-predictive-models-in-r-with-caret-12baf9941236)
+- [https://daviddalpiaz.github.io/r4sl/the-caret-package.html#regression](https://towardsdatascience.com/create-predictive-models-in-r-with-caret-12baf9941236)
+- [https://topepo.github.io/caret/measuring-performance.html](https://towardsdatascience.com/create-predictive-models-in-r-with-caret-12baf9941236)
